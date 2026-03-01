@@ -19,7 +19,7 @@ export function useLocations() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setLocations((data as Location[]) ?? []);
+      setLocations((data as unknown as Location[]) ?? []);
     } catch (err: any) {
       // Fall back to basic locations table if view doesn't exist yet
       const { data, error: fallbackError } = await supabase
@@ -94,7 +94,7 @@ export function useLocation(id: string) {
           .single();
 
         if (error) throw error;
-        setLocation(data as Location);
+        setLocation(data as unknown as Location);
       } catch {
         // Fall back to basic table
         const { data, error: fallbackError } = await supabase

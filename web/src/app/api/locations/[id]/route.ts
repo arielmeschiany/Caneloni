@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@canaloni/shared';
-
-function getClient() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+import { supabase } from '@/lib/supabase';
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getClient();
-
-  const { data, error } = await supabase
-    .from('locations_with_stats' as any)
+  const { data, error } = await (supabase as any)
+    .from('locations_with_stats')
     .select('*')
     .eq('id', params.id)
     .single();
@@ -32,8 +22,6 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const supabase = getClient();
-
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@canaloni/shared';
-
-function getClient() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
-  const supabase = getClient();
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get('location_id');
 
@@ -32,8 +23,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = getClient();
-
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -59,7 +48,12 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('reviews')
-    .upsert({ location_id, user_id: user.id, rating, comment })
+    .upsert({
+      location_id: location_id as string,
+      user_id: user.id,
+      rating: rating as number,
+      comment: (comment ?? null) as string | null,
+    })
     .select()
     .single();
 
