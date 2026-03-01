@@ -1,0 +1,16 @@
+{
+  "name": "canaloni",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "web": "npm run dev -w @canaloni/web",
+    "mobile": "npm run start -w @canaloni/mobile",
+    "shared:build": "npm run build -w @canaloni/shared",
+    "install:all": "npm install"
+  }
+}

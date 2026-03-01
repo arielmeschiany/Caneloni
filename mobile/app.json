@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "Canaloni",
+    "slug": "canaloni",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F0E8"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.canaloni.app",
+      "config": {
+        "googleMapsApiKey": "PASTE_YOUR_GOOGLE_MAPS_KEY_HERE"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Canaloni uses your location to help you pin spots nearby.",
+        "NSLocationAlwaysUsageDescription": "Canaloni uses your location to help you pin spots nearby.",
+        "NSPhotoLibraryUsageDescription": "Canaloni needs access to your photo library to add photos to pins.",
+        "NSCameraUsageDescription": "Canaloni needs access to your camera to take photos for pins."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F5F0E8"
+      },
+      "package": "com.canaloni.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "PASTE_YOUR_GOOGLE_MAPS_KEY_HERE"
+        }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-location",
+      "expo-image-picker",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow Canaloni to access your Face ID to securely store credentials."
+        }
+      ]
+    ],
+    "extra": {
+      "supabaseUrl": "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",
+      "supabaseAnonKey": "PASTE_YOUR_SUPABASE_ANON_KEY_HERE",
+      "googleMapsApiKey": "PASTE_YOUR_GOOGLE_MAPS_KEY_HERE"
+    }
+  }
+}
