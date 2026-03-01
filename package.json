@@ -7,6 +7,14 @@
     "web",
     "mobile"
   ],
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
   "scripts": {
     "web": "npm run dev -w @canaloni/web",
     "mobile": "npm run start -w @canaloni/mobile",

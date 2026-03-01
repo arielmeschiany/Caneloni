@@ -13,7 +13,7 @@ import { ReviewForm } from '@/components/Location/ReviewForm';
 import { LocationDetail } from '@/components/Location/LocationDetail';
 
 export default function LocationPage() {
-  const params = useParams();
+  const params = useParams()!;
   const router = useRouter();
   const id = params.id as string;
   const { location, loading, error } = useLocation(id);
