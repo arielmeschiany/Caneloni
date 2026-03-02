@@ -1,63 +1,84 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import type { Category, NewLocation } from '@canaloni/shared';
-import { CATEGORIES, TUSCANY_CENTER } from '@canaloni/shared';
-import { useGeolocation } from '@/hooks/useGeolocation';
+import { useState, useRef, useEffect } from 'react';
+import type { Category } from '@canaloni/shared';
+import { CATEGORIES } from '@canaloni/shared';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useGuest } from '@/hooks/useGuest';
 
+const TUSCANY_BOUNDS = {
+  south: 42.3,
+  west: 9.7,
+  north: 44.5,
+  east: 12.4,
+};
+
+interface ResolvedPlace {
+  lat: number;
+  lng: number;
+  address: string;
+}
+
 interface AddLocationModalProps {
-  initialLat?: number;
-  initialLng?: number;
-  initialName?: string;
   onClose: () => void;
   onSuccess: (location: any) => void;
   onAuthRequired: () => void;
 }
 
-export function AddLocationModal({
-  initialLat,
-  initialLng,
-  initialName,
-  onClose,
-  onSuccess,
-  onAuthRequired,
-}: AddLocationModalProps) {
+export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLocationModalProps) {
   const { user } = useAuth();
   const { guestName } = useGuest();
-  const { lat: geoLat, lng: geoLng, loading: geoLoading, error: geoError, getCurrentPosition } = useGeolocation();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const [name, setName] = useState(initialName ?? '');
+  const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>('pizzeria');
   const [description, setDescription] = useState('');
-  const [lat, setLat] = useState<string>(initialLat?.toFixed(6) ?? '');
-  const [lng, setLng] = useState<string>(initialLng?.toFixed(6) ?? '');
+  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(null);
   const [uploading, setUploading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // When geolocation resolves, populate fields
-  const handleUseMyLocation = useCallback(() => {
-    getCurrentPosition();
-  }, [getCurrentPosition]);
+  // Attach Google Places Autocomplete to the search input
+  useEffect(() => {
+    if (!inputRef.current || typeof window === 'undefined' || !window.google) return;
 
-  // Sync geolocation coords → form fields once they arrive
-  const syncedLat = geoLat !== null ? geoLat.toFixed(6) : lat;
-  const syncedLng = geoLng !== null ? geoLng.toFixed(6) : lng;
+    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+      bounds: new window.google.maps.LatLngBounds(
+        { lat: TUSCANY_BOUNDS.south, lng: TUSCANY_BOUNDS.west },
+        { lat: TUSCANY_BOUNDS.north, lng: TUSCANY_BOUNDS.east }
+      ),
+      fields: ['name', 'geometry', 'formatted_address'],
+      strictBounds: false,
+    });
 
-  const effectiveLat = geoLat ?? (lat ? parseFloat(lat) : undefined);
-  const effectiveLng = geoLng ?? (lng ? parseFloat(lng) : undefined);
+    ac.addListener('place_changed', () => {
+      const place = ac.getPlace();
+      if (!place?.geometry?.location) return;
+      const lat = place.geometry.location.lat();
+      const lng = place.geometry.location.lng();
+      const address = place.formatted_address ?? place.name ?? '';
+      setResolvedPlace({ lat, lng, address });
+      // Pre-fill name if still empty
+      if (!name && place.name) {
+        setName(place.name);
+      }
+    });
+
+    return () => {
+      window.google.maps.event.clearInstanceListeners(ac);
+    };
+    // Only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoFile(file);
-    const url = URL.createObjectURL(file);
-    setPhotoPreview(url);
+    setPhotoPreview(URL.createObjectURL(file));
   };
 
   const uploadPhoto = async (file: File): Promise<string | null> => {
@@ -77,10 +98,7 @@ export function AddLocationModal({
     e.preventDefault();
     if (!user && !guestName) { onAuthRequired(); return; }
     if (!name.trim()) { setError('Name is required.'); return; }
-    if (effectiveLat === undefined || effectiveLng === undefined) {
-      setError('Please set coordinates using the map or "Use my location".');
-      return;
-    }
+    if (!resolvedPlace) { setError('Please search and select a place.'); return; }
 
     setLoading(true);
     setError(null);
@@ -94,27 +112,15 @@ export function AddLocationModal({
       name: name.trim(),
       category,
       description: description.trim(),
-      lat: effectiveLat,
-      lng: effectiveLng,
+      lat: resolvedPlace.lat,
+      lng: resolvedPlace.lng,
       photo_url,
-      created_by: user?.id ?? null,
-      guest_name: !user && guestName ? `${guestName} (Guest)` : null,
     };
 
-    const { data, error: insertError } = await supabase
-      .from('locations')
-      .insert(payload)
-      .select()
-      .single();
-
     setLoading(false);
-
-    if (insertError) {
-      setError(insertError.message);
-    } else {
-      onSuccess(data);
-      onClose();
-    }
+    // Pass payload to parent for optimistic insert; close immediately
+    onSuccess(payload);
+    onClose();
   };
 
   return (
@@ -135,6 +141,21 @@ export function AddLocationModal({
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">{error}</div>
           )}
+
+          {/* Place Search */}
+          <div>
+            <label className="block text-sm font-medium text-brown mb-1">Search for a place *</label>
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Search for a place…"
+              className="input-field"
+              autoComplete="off"
+            />
+            {resolvedPlace && (
+              <p className="text-xs text-brown/50 mt-1">📍 {resolvedPlace.address}</p>
+            )}
+          </div>
 
           {/* Name */}
           <div>
@@ -178,51 +199,6 @@ export function AddLocationModal({
             />
           </div>
 
-          {/* Coordinates */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-brown">Coordinates *</label>
-              <button
-                type="button"
-                onClick={handleUseMyLocation}
-                disabled={geoLoading}
-                className="text-xs text-terracotta hover:underline disabled:opacity-50"
-              >
-                {geoLoading ? '📡 Locating…' : '📍 Use my location'}
-              </button>
-            </div>
-            {geoError && <p className="text-xs text-red-500 mb-1">{geoError}</p>}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-brown/50 mb-0.5 block">Latitude</label>
-                <input
-                  type="number"
-                  value={geoLat !== null ? geoLat.toFixed(6) : lat}
-                  onChange={e => setLat(e.target.value)}
-                  placeholder="43.7711"
-                  step="0.000001"
-                  className="input-field text-sm font-mono"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs text-brown/50 mb-0.5 block">Longitude</label>
-                <input
-                  type="number"
-                  value={geoLng !== null ? geoLng.toFixed(6) : lng}
-                  onChange={e => setLng(e.target.value)}
-                  placeholder="11.2486"
-                  step="0.000001"
-                  className="input-field text-sm font-mono"
-                  required
-                />
-              </div>
-            </div>
-            <p className="text-xs text-brown/40 mt-1">
-              Tip: Click on the map first to pre-fill these coordinates.
-            </p>
-          </div>
-
           {/* Photo */}
           <div>
             <label className="block text-sm font-medium text-brown mb-1">Photo (optional)</label>
@@ -247,8 +223,8 @@ export function AddLocationModal({
 
           <button
             type="submit"
-            disabled={loading || uploading}
-            className="btn-primary w-full py-3 text-base sticky bottom-0"
+            disabled={loading || uploading || !resolvedPlace}
+            className="btn-primary w-full py-3 text-base sticky bottom-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading || uploading ? 'Saving…' : '📌 Pin this Location'}
           </button>

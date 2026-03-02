@@ -43,7 +43,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const validCategories = ['restaurant', 'market', 'street', 'store', 'boutique'];
+  const validCategories = [
+    'pizzeria', 'classic_italian', 'beef_meat', 'seafood', 'vineyards',
+    'hotels', 'sightseeing', 'views_panoramas', 'beaches', 'walking_trails',
+    'mountains', 'home_residential', 'museums_galleries', 'local_markets',
+    'pharmacy', 'taxi_station', 'train_station',
+  ];
   if (!validCategories.includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
   }

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   GoogleMap,
   useJsApiLoader,
   Marker,
   InfoWindow,
   Autocomplete,
+  Polyline,
 } from '@react-google-maps/api';
 import type { Libraries } from '@react-google-maps/api';
 import type { Location } from '@canaloni/shared';
@@ -15,6 +17,7 @@ import { createMarkerIcon } from '@/lib/mapIcons';
 import { CategoryBadge } from '@/components/UI/CategoryBadge';
 import { StarRating } from '@/components/UI/StarRating';
 import { formatRating } from '@canaloni/shared';
+import type { HikingTrail } from '@/hooks/useHikingTrails';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 
@@ -52,24 +55,34 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   ],
 };
 
-
 interface MapViewProps {
   locations: Location[];
   onLocationSelect: (location: Location) => void;
   onMapClick: (lat: number, lng: number) => void;
   onSearchSelect?: (lat: number, lng: number, name: string) => void;
+  trails?: HikingTrail[];
+  showTrails?: boolean;
 }
 
-export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelect }: MapViewProps) {
+export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelect, trails = [], showTrails = false }: MapViewProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
     libraries: LIBRARIES,
   });
 
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  const [selectedTrail, setSelectedTrail] = useState<HikingTrail | null>(null);
   const [searchMarker, setSearchMarker] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  // Attach search portal once mounted
+  useEffect(() => {
+    if (isLoaded) {
+      setPortalTarget(document.getElementById('header-search-portal'));
+    }
+  }, [isLoaded]);
 
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
@@ -79,6 +92,7 @@ export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelec
     (e: google.maps.MapMouseEvent) => {
       if (!e.latLng) return;
       setSelectedLocation(null);
+      setSelectedTrail(null);
       onMapClick(e.latLng.lat(), e.latLng.lng());
     },
     [onMapClick]
@@ -87,12 +101,17 @@ export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelec
   const handleMarkerClick = useCallback(
     (location: Location) => {
       setSelectedLocation(location);
+      setSelectedTrail(null);
     },
     []
   );
 
   const handleInfoWindowClose = useCallback(() => {
     setSelectedLocation(null);
+  }, []);
+
+  const handleTrailInfoClose = useCallback(() => {
+    setSelectedTrail(null);
   }, []);
 
   const handleOpenDetail = useCallback(
@@ -139,8 +158,8 @@ export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelec
 
   return (
     <div className="relative w-full h-full">
-      {/* Search bar overlay */}
-      <div style={{ position: 'absolute', top: '90px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '320px', maxWidth: 'calc(100% - 160px)' }}>
+      {/* Portal the Autocomplete search into the header slot */}
+      {portalTarget && (createPortal(
         <Autocomplete
           onLoad={ac => { autocompleteRef.current = ac; }}
           bounds={TUSCANY_BOUNDS}
@@ -150,10 +169,11 @@ export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelec
           <input
             type="text"
             placeholder="Search in Tuscany…"
-            className="w-full rounded-xl shadow-tuscany px-4 py-2.5 text-sm text-brown bg-white/95 backdrop-blur-sm outline-none border border-cream-dark focus:border-terracotta transition-colors"
+            className="w-full h-9 rounded-xl shadow-tuscany px-4 text-sm text-brown bg-white/95 outline-none border border-cream-dark focus:border-terracotta transition-colors"
           />
-        </Autocomplete>
-      </div>
+        </Autocomplete>,
+        portalTarget
+      ) as React.ReactNode)}
 
       {/* Save callout above search marker */}
       {searchMarker && onSearchSelect && (
@@ -187,6 +207,7 @@ export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelec
         onLoad={handleMapLoad}
         onClick={handleMapClick}
       >
+        {/* Location markers */}
         {locations.map(location => (
           <Marker
             key={location.id}
@@ -231,13 +252,49 @@ export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelec
           </InfoWindow>
         )}
 
-        {/* Search result marker with DROP animation */}
+        {/* Search result marker */}
         {searchMarker && (
           <Marker
             position={{ lat: searchMarker.lat, lng: searchMarker.lng }}
             animation={google.maps.Animation.DROP}
           />
         )}
+
+        {/* Hiking trail polylines */}
+        {showTrails && trails.map(trail => (
+          <Polyline
+            key={trail.id}
+            path={trail.coordinates}
+            options={{
+              strokeColor: '#5C8A3A',
+              strokeOpacity: 0.75,
+              strokeWeight: 3,
+              clickable: true,
+            }}
+            onClick={() => setSelectedTrail(trail)}
+          />
+        ))}
+
+        {/* Trail info window */}
+        {selectedTrail && selectedTrail.coordinates.length > 0 && (() => {
+          const mid = selectedTrail.coordinates[Math.floor(selectedTrail.coordinates.length / 2)];
+          return (
+            <InfoWindow
+              position={mid}
+              onCloseClick={handleTrailInfoClose}
+            >
+              <div className="p-1 max-w-[200px]">
+                <p className="font-semibold text-brown text-sm mb-0.5">🥾 {selectedTrail.name || 'Unnamed Trail'}</p>
+                {selectedTrail.distance && (
+                  <p className="text-xs text-brown/60">{(selectedTrail.distance / 1000).toFixed(1)} km</p>
+                )}
+                {selectedTrail.difficulty && (
+                  <p className="text-xs text-brown/60">Difficulty: {selectedTrail.difficulty}</p>
+                )}
+              </div>
+            </InfoWindow>
+          );
+        })()}
       </GoogleMap>
     </div>
   );

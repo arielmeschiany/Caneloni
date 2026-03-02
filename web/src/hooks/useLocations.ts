@@ -72,7 +72,57 @@ export function useLocations() {
     []
   );
 
-  return { locations, loading, error, addLocation, refetch: fetchLocations };
+  const addLocationOptimistic = useCallback(
+    async (
+      payload: Omit<NewLocation, 'photo_url'> & { photo_url?: string | null },
+      userId: string | null,
+      guestName: string | null
+    ): Promise<Location> => {
+      const tempId = `temp_${Date.now()}`;
+      const optimistic: Location = {
+        id: tempId,
+        ...payload,
+        photo_url: payload.photo_url ?? null,
+        created_by: userId,
+        guest_name: guestName,
+        created_at: new Date().toISOString(),
+      };
+
+      setLocations(prev => [optimistic, ...prev]);
+
+      try {
+        const { data, error } = await supabase
+          .from('locations')
+          .insert({
+            name: payload.name,
+            category: payload.category,
+            description: payload.description,
+            lat: payload.lat,
+            lng: payload.lng,
+            photo_url: payload.photo_url ?? null,
+            created_by: userId,
+            guest_name: guestName,
+          })
+          .select()
+          .single();
+
+        if (error) throw new Error(error.message);
+
+        setLocations(prev => prev.map(l => (l.id === tempId ? (data as Location) : l)));
+        return data as Location;
+      } catch (err) {
+        setLocations(prev => prev.filter(l => l.id !== tempId));
+        throw err;
+      }
+    },
+    []
+  );
+
+  const removeLocation = useCallback((id: string) => {
+    setLocations(prev => prev.filter(l => l.id !== id));
+  }, []);
+
+  return { locations, loading, error, addLocation, addLocationOptimistic, removeLocation, refetch: fetchLocations };
 }
 
 export function useLocation(id: string) {
