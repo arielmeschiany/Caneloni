@@ -1,4 +1,21 @@
-export type Category = 'restaurant' | 'market' | 'street' | 'store' | 'boutique';
+export type Category =
+  | 'pizzeria'
+  | 'classic_italian'
+  | 'beef_meat'
+  | 'seafood'
+  | 'vineyards'
+  | 'hotels'
+  | 'sightseeing'
+  | 'views_panoramas'
+  | 'beaches'
+  | 'walking_trails'
+  | 'mountains'
+  | 'home_residential'
+  | 'museums_galleries'
+  | 'local_markets'
+  | 'pharmacy'
+  | 'taxi_station'
+  | 'train_station';
 
 export interface Location {
   id: string;
@@ -10,6 +27,7 @@ export interface Location {
   photo_url: string | null;
   created_by: string | null;
   created_at: string;
+  guest_name?: string | null;
   // Joined fields
   avg_rating?: number | null;
   review_count?: number;
@@ -50,12 +68,24 @@ export interface NewReview {
   comment: string;
 }
 
-export const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'restaurant', label: 'Restaurant' },
-  { value: 'market', label: 'Market' },
-  { value: 'street', label: 'Street' },
-  { value: 'store', label: 'Store' },
-  { value: 'boutique', label: 'Boutique' },
+export const CATEGORIES: { value: Category; label: string; emoji: string }[] = [
+  { value: 'pizzeria',          label: 'Pizzeria',            emoji: '🍕' },
+  { value: 'classic_italian',   label: 'Classic Italian',     emoji: '🍝' },
+  { value: 'beef_meat',         label: 'Beef & Meat',         emoji: '🥩' },
+  { value: 'seafood',           label: 'Seafood',             emoji: '🦞' },
+  { value: 'vineyards',         label: 'Vineyards',           emoji: '🍷' },
+  { value: 'hotels',            label: 'Hotels',              emoji: '🏨' },
+  { value: 'sightseeing',       label: 'Sightseeing',         emoji: '🏛️' },
+  { value: 'views_panoramas',   label: 'Views & Panoramas',   emoji: '🌅' },
+  { value: 'beaches',           label: 'Beaches',             emoji: '🏖️' },
+  { value: 'walking_trails',    label: 'Walking Trails',      emoji: '🥾' },
+  { value: 'mountains',         label: 'Mountains',           emoji: '⛰️' },
+  { value: 'home_residential',  label: 'Home & Residential',  emoji: '🏠' },
+  { value: 'museums_galleries', label: 'Museums & Galleries', emoji: '🎨' },
+  { value: 'local_markets',     label: 'Local Markets',       emoji: '🧺' },
+  { value: 'pharmacy',          label: 'Pharmacy',            emoji: '💊' },
+  { value: 'taxi_station',      label: 'Taxi Station',        emoji: '🚕' },
+  { value: 'train_station',     label: 'Train Station',       emoji: '🚂' },
 ];
 
 export const TUSCANY_CENTER = {

@@ -12,6 +12,7 @@ export type Database = {
           photo_url: string | null;
           created_by: string | null;
           created_at: string;
+          guest_name: string | null;
         };
         Insert: {
           id?: string;
@@ -23,6 +24,7 @@ export type Database = {
           photo_url?: string | null;
           created_by?: string | null;
           created_at?: string;
+          guest_name?: string | null;
         };
         Update: {
           id?: string;
@@ -34,6 +36,7 @@ export type Database = {
           photo_url?: string | null;
           created_by?: string | null;
           created_at?: string;
+          guest_name?: string | null;
         };
         Relationships: [];
       };

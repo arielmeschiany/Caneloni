@@ -6,14 +6,26 @@ import {
   useJsApiLoader,
   Marker,
   InfoWindow,
+  Autocomplete,
 } from '@react-google-maps/api';
+import type { Libraries } from '@react-google-maps/api';
 import type { Location } from '@canaloni/shared';
-import { TUSCANY_CENTER, DEFAULT_ZOOM, CATEGORY_COLORS, CATEGORY_EMOJIS } from '@canaloni/shared';
+import { TUSCANY_CENTER, DEFAULT_ZOOM } from '@canaloni/shared';
+import { createMarkerIcon } from '@/lib/mapIcons';
 import { CategoryBadge } from '@/components/UI/CategoryBadge';
 import { StarRating } from '@/components/UI/StarRating';
 import { formatRating } from '@canaloni/shared';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
+
+const LIBRARIES: Libraries = ['places'];
+
+const TUSCANY_BOUNDS = {
+  south: 42.3,
+  west: 9.7,
+  north: 44.5,
+  east: 12.4,
+};
 
 const MAP_OPTIONS: google.maps.MapOptions = {
   disableDefaultUI: false,
@@ -40,33 +52,24 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   ],
 };
 
-function createMarkerIcon(category: string, selected = false): google.maps.Symbol {
-  const color = CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] ?? '#C4622D';
-  const scale = selected ? 12 : 9;
-  return {
-    path: google.maps.SymbolPath.CIRCLE,
-    fillColor: color,
-    fillOpacity: 1,
-    strokeColor: '#ffffff',
-    strokeWeight: selected ? 3 : 2,
-    scale,
-  };
-}
 
 interface MapViewProps {
   locations: Location[];
   onLocationSelect: (location: Location) => void;
   onMapClick: (lat: number, lng: number) => void;
+  onSearchSelect?: (lat: number, lng: number, name: string) => void;
 }
 
-export function MapView({ locations, onLocationSelect, onMapClick }: MapViewProps) {
+export function MapView({ locations, onLocationSelect, onMapClick, onSearchSelect }: MapViewProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
-    libraries: [],
+    libraries: LIBRARIES,
   });
 
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+  const [searchMarker, setSearchMarker] = useState<{ lat: number; lng: number; name: string } | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
@@ -100,6 +103,17 @@ export function MapView({ locations, onLocationSelect, onMapClick }: MapViewProp
     [onLocationSelect]
   );
 
+  const handlePlaceChanged = useCallback(() => {
+    const place = autocompleteRef.current?.getPlace();
+    if (!place?.geometry?.location) return;
+    const lat = place.geometry.location.lat();
+    const lng = place.geometry.location.lng();
+    const name = place.name ?? '';
+    mapRef.current?.panTo({ lat, lng });
+    mapRef.current?.setZoom(16);
+    setSearchMarker({ lat, lng, name });
+  }, []);
+
   if (loadError) {
     return (
       <div className="flex items-center justify-center w-full h-full bg-cream text-brown/60">
@@ -124,57 +138,107 @@ export function MapView({ locations, onLocationSelect, onMapClick }: MapViewProp
   }
 
   return (
-    <GoogleMap
-      mapContainerStyle={MAP_CONTAINER_STYLE}
-      center={TUSCANY_CENTER}
-      zoom={DEFAULT_ZOOM}
-      options={MAP_OPTIONS}
-      onLoad={handleMapLoad}
-      onClick={handleMapClick}
-    >
-      {locations.map(location => (
-        <Marker
-          key={location.id}
-          position={{ lat: location.lat, lng: location.lng }}
-          icon={createMarkerIcon(location.category, selectedLocation?.id === location.id)}
-          title={location.name}
-          onClick={() => handleMarkerClick(location)}
-        />
-      ))}
-
-      {selectedLocation && (
-        <InfoWindow
-          position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
-          onCloseClick={handleInfoWindowClose}
-          options={{ pixelOffset: new google.maps.Size(0, -12) }}
+    <div className="relative w-full h-full">
+      {/* Search bar overlay */}
+      <div style={{ position: 'absolute', top: '90px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '320px', maxWidth: 'calc(100% - 160px)' }}>
+        <Autocomplete
+          onLoad={ac => { autocompleteRef.current = ac; }}
+          bounds={TUSCANY_BOUNDS}
+          options={{ strictBounds: false }}
+          onPlaceChanged={handlePlaceChanged}
         >
-          <div className="p-1 max-w-[240px]">
-            <div className="mb-1">
-              <CategoryBadge category={selectedLocation.category} size="sm" />
-            </div>
-            <h3 className="font-serif font-bold text-brown text-base leading-tight mb-1">
-              {selectedLocation.name}
-            </h3>
-            {selectedLocation.avg_rating !== null && selectedLocation.avg_rating !== undefined ? (
-              <div className="flex items-center gap-1.5 mb-2">
-                <StarRating rating={selectedLocation.avg_rating} size="sm" />
-                <span className="text-xs font-semibold text-amber-600">
-                  {formatRating(selectedLocation.avg_rating)}
-                </span>
-              </div>
-            ) : null}
-            {selectedLocation.description && (
-              <p className="text-xs text-brown/60 mb-2 line-clamp-2">{selectedLocation.description}</p>
-            )}
+          <input
+            type="text"
+            placeholder="Search in Tuscany…"
+            className="w-full rounded-xl shadow-tuscany px-4 py-2.5 text-sm text-brown bg-white/95 backdrop-blur-sm outline-none border border-cream-dark focus:border-terracotta transition-colors"
+          />
+        </Autocomplete>
+      </div>
+
+      {/* Save callout above search marker */}
+      {searchMarker && onSearchSelect && (
+        <div style={{ position: 'absolute', bottom: '120px', left: '50%', transform: 'translateX(-50%)', zIndex: 5 }}>
+          <div className="bg-white rounded-xl shadow-tuscany-lg px-4 py-2.5 flex items-center gap-3 animate-slide-up">
+            <span className="text-sm text-brown/70">📍 {searchMarker.name}</span>
             <button
-              onClick={() => handleOpenDetail(selectedLocation)}
-              className="text-xs font-semibold text-terracotta hover:underline"
+              onClick={() => {
+                onSearchSelect(searchMarker.lat, searchMarker.lng, searchMarker.name);
+                setSearchMarker(null);
+              }}
+              className="text-sm font-semibold text-terracotta hover:underline"
             >
-              View details & reviews →
+              Save →
+            </button>
+            <button
+              onClick={() => setSearchMarker(null)}
+              className="text-brown/30 hover:text-brown/60 text-lg leading-none"
+            >
+              ×
             </button>
           </div>
-        </InfoWindow>
+        </div>
       )}
-    </GoogleMap>
+
+      <GoogleMap
+        mapContainerStyle={MAP_CONTAINER_STYLE}
+        center={TUSCANY_CENTER}
+        zoom={DEFAULT_ZOOM}
+        options={MAP_OPTIONS}
+        onLoad={handleMapLoad}
+        onClick={handleMapClick}
+      >
+        {locations.map(location => (
+          <Marker
+            key={location.id}
+            position={{ lat: location.lat, lng: location.lng }}
+            icon={createMarkerIcon(location.category, selectedLocation?.id === location.id)}
+            title={location.name}
+            onClick={() => handleMarkerClick(location)}
+          />
+        ))}
+
+        {selectedLocation && (
+          <InfoWindow
+            position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
+            onCloseClick={handleInfoWindowClose}
+            options={{ pixelOffset: new google.maps.Size(0, -12) }}
+          >
+            <div className="p-1 max-w-[240px]">
+              <div className="mb-1">
+                <CategoryBadge category={selectedLocation.category} size="sm" />
+              </div>
+              <h3 className="font-serif font-bold text-brown text-base leading-tight mb-1">
+                {selectedLocation.name}
+              </h3>
+              {selectedLocation.avg_rating !== null && selectedLocation.avg_rating !== undefined ? (
+                <div className="flex items-center gap-1.5 mb-2">
+                  <StarRating rating={selectedLocation.avg_rating} size="sm" />
+                  <span className="text-xs font-semibold text-amber-600">
+                    {formatRating(selectedLocation.avg_rating)}
+                  </span>
+                </div>
+              ) : null}
+              {selectedLocation.description && (
+                <p className="text-xs text-brown/60 mb-2 line-clamp-2">{selectedLocation.description}</p>
+              )}
+              <button
+                onClick={() => handleOpenDetail(selectedLocation)}
+                className="text-xs font-semibold text-terracotta hover:underline"
+              >
+                View details & reviews →
+              </button>
+            </div>
+          </InfoWindow>
+        )}
+
+        {/* Search result marker with DROP animation */}
+        {searchMarker && (
+          <Marker
+            position={{ lat: searchMarker.lat, lng: searchMarker.lng }}
+            animation={google.maps.Animation.DROP}
+          />
+        )}
+      </GoogleMap>
+    </div>
   );
 }

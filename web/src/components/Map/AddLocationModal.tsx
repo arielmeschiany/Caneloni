@@ -6,10 +6,12 @@ import { CATEGORIES, TUSCANY_CENTER } from '@canaloni/shared';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useGuest } from '@/hooks/useGuest';
 
 interface AddLocationModalProps {
   initialLat?: number;
   initialLng?: number;
+  initialName?: string;
   onClose: () => void;
   onSuccess: (location: any) => void;
   onAuthRequired: () => void;
@@ -18,15 +20,17 @@ interface AddLocationModalProps {
 export function AddLocationModal({
   initialLat,
   initialLng,
+  initialName,
   onClose,
   onSuccess,
   onAuthRequired,
 }: AddLocationModalProps) {
   const { user } = useAuth();
+  const { guestName } = useGuest();
   const { lat: geoLat, lng: geoLng, loading: geoLoading, error: geoError, getCurrentPosition } = useGeolocation();
 
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<Category>('restaurant');
+  const [name, setName] = useState(initialName ?? '');
+  const [category, setCategory] = useState<Category>('pizzeria');
   const [description, setDescription] = useState('');
   const [lat, setLat] = useState<string>(initialLat?.toFixed(6) ?? '');
   const [lng, setLng] = useState<string>(initialLng?.toFixed(6) ?? '');
@@ -71,7 +75,7 @@ export function AddLocationModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) { onAuthRequired(); return; }
+    if (!user && !guestName) { onAuthRequired(); return; }
     if (!name.trim()) { setError('Name is required.'); return; }
     if (effectiveLat === undefined || effectiveLng === undefined) {
       setError('Please set coordinates using the map or "Use my location".');
@@ -86,19 +90,20 @@ export function AddLocationModal({
       photo_url = await uploadPhoto(photoFile);
     }
 
-    const newLocation: NewLocation & { created_by: string } = {
+    const payload = {
       name: name.trim(),
       category,
       description: description.trim(),
       lat: effectiveLat,
       lng: effectiveLng,
       photo_url,
-      created_by: user.id,
+      created_by: user?.id ?? null,
+      guest_name: !user && guestName ? `${guestName} (Guest)` : null,
     };
 
     const { data, error: insertError } = await supabase
       .from('locations')
-      .insert(newLocation)
+      .insert(payload)
       .select()
       .single();
 
@@ -155,7 +160,7 @@ export function AddLocationModal({
               required
             >
               {CATEGORIES.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
+                <option key={c.value} value={c.value}>{c.emoji} {c.label}</option>
               ))}
             </select>
           </div>

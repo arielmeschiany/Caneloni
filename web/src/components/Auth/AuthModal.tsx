@@ -6,12 +6,14 @@ import { useAuth } from '@/hooks/useAuth';
 interface AuthModalProps {
   onClose: () => void;
   defaultMode?: 'sign-in' | 'sign-up';
+  onContinueAsGuest?: (name: string) => void;
 }
 
-export function AuthModal({ onClose, defaultMode = 'sign-in' }: AuthModalProps) {
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>(defaultMode);
+export function AuthModal({ onClose, defaultMode = 'sign-in', onContinueAsGuest }: AuthModalProps) {
+  const [mode, setMode] = useState<'sign-in' | 'sign-up' | 'guest'>(defaultMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [guestNameInput, setGuestNameInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,8 +23,14 @@ export function AuthModal({ onClose, defaultMode = 'sign-in' }: AuthModalProps) 
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
-    setLoading(true);
 
+    if (mode === 'guest') {
+      if (!guestNameInput.trim()) { setError('Please enter a display name.'); return; }
+      onContinueAsGuest?.(guestNameInput.trim());
+      return;
+    }
+
+    setLoading(true);
     try {
       if (mode === 'sign-in') {
         const { error } = await signIn(email, password);
@@ -40,6 +48,10 @@ export function AuthModal({ onClose, defaultMode = 'sign-in' }: AuthModalProps) 
     }
   };
 
+  const headerSubtitle =
+    mode === 'guest' ? 'Continue without an account' :
+    mode === 'sign-in' ? 'Welcome back!' : 'Join the community';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brown/50 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-2xl shadow-tuscany-lg w-full max-w-sm mx-4 overflow-hidden animate-slide-up">
@@ -48,9 +60,7 @@ export function AuthModal({ onClose, defaultMode = 'sign-in' }: AuthModalProps) 
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-serif font-bold">Canaloni</h2>
-              <p className="text-white/80 text-sm mt-0.5">
-                {mode === 'sign-in' ? 'Welcome back!' : 'Join the community'}
-              </p>
+              <p className="text-white/80 text-sm mt-0.5">{headerSubtitle}</p>
             </div>
             <button
               onClick={onClose}
@@ -74,51 +84,95 @@ export function AuthModal({ onClose, defaultMode = 'sign-in' }: AuthModalProps) 
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-brown mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="input-field"
-              required
-              autoComplete="email"
-            />
-          </div>
+          {mode === 'guest' ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-brown mb-1">Display name</label>
+                <input
+                  type="text"
+                  value={guestNameInput}
+                  onChange={e => setGuestNameInput(e.target.value)}
+                  placeholder="e.g. Marco from Florence"
+                  className="input-field"
+                  required
+                  maxLength={60}
+                  autoFocus
+                />
+              </div>
+              <button type="submit" className="btn-primary w-full py-3 text-base">
+                Continue →
+              </button>
+              <p className="text-center text-sm text-brown/60">
+                <button
+                  type="button"
+                  onClick={() => { setMode('sign-in'); setError(null); }}
+                  className="text-terracotta font-medium hover:underline"
+                >
+                  ← Back to sign in
+                </button>
+              </p>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-brown mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="input-field"
+                  required
+                  autoComplete="email"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-brown mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="input-field"
-              required
-              minLength={6}
-              autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-brown mb-1">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="input-field"
+                  required
+                  minLength={6}
+                  autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full py-3 text-base"
-          >
-            {loading ? 'Please wait…' : mode === 'sign-in' ? 'Sign In' : 'Create Account'}
-          </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full py-3 text-base"
+              >
+                {loading ? 'Please wait…' : mode === 'sign-in' ? 'Sign In' : 'Create Account'}
+              </button>
 
-          <p className="text-center text-sm text-brown/60">
-            {mode === 'sign-in' ? "Don't have an account? " : 'Already have an account? '}
-            <button
-              type="button"
-              onClick={() => { setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in'); setError(null); setSuccessMsg(null); }}
-              className="text-terracotta font-medium hover:underline"
-            >
-              {mode === 'sign-in' ? 'Sign up' : 'Sign in'}
-            </button>
-          </p>
+              <p className="text-center text-sm text-brown/60">
+                {mode === 'sign-in' ? "Don't have an account? " : 'Already have an account? '}
+                <button
+                  type="button"
+                  onClick={() => { setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in'); setError(null); setSuccessMsg(null); }}
+                  className="text-terracotta font-medium hover:underline"
+                >
+                  {mode === 'sign-in' ? 'Sign up' : 'Sign in'}
+                </button>
+              </p>
+
+              {onContinueAsGuest && (
+                <p className="text-center text-sm text-brown/40">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('guest'); setError(null); setSuccessMsg(null); }}
+                    className="hover:text-brown/60 transition-colors"
+                  >
+                    Continue as Guest
+                  </button>
+                </p>
+              )}
+            </>
+          )}
         </form>
       </div>
     </div>
