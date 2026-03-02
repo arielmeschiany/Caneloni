@@ -12,11 +12,8 @@ import {
 } from '@react-google-maps/api';
 import type { Libraries } from '@react-google-maps/api';
 import type { Location, Category } from '@canaloni/shared';
-import { TUSCANY_CENTER, DEFAULT_ZOOM, CATEGORIES } from '@canaloni/shared';
+import { TUSCANY_CENTER, DEFAULT_ZOOM } from '@canaloni/shared';
 import { createMarkerIcon } from '@/lib/mapIcons';
-import { CategoryBadge } from '@/components/UI/CategoryBadge';
-import { StarRating } from '@/components/UI/StarRating';
-import { formatRating } from '@canaloni/shared';
 import type { HikingTrail } from '@/hooks/useHikingTrails';
 import type { InitialPlace } from './AddLocationModal';
 
@@ -61,6 +58,9 @@ const TYPE_TO_CATEGORY: Record<string, Category> = {
   bakery: 'classic_italian',
   bar: 'classic_italian',
   food: 'classic_italian',
+  pizza_restaurant: 'pizzeria',
+  meal_delivery: 'classic_italian',
+  meal_takeaway: 'classic_italian',
   lodging: 'hotels',
   museum: 'museums_galleries',
   art_gallery: 'museums_galleries',
@@ -86,35 +86,28 @@ function googleTypesToCategory(types: string[]): Category | undefined {
 
 interface MapViewProps {
   locations: Location[];
+  selectedLocationId?: string | null;
   onLocationSelect: (location: Location) => void;
   onMapClick: (lat: number, lng: number) => void;
   trails?: HikingTrail[];
   showTrails?: boolean;
   onRightClickAdd?: (place: InitialPlace) => void;
-  userId?: string | null;
-  userEmail?: string | null;
-  adminEmail?: string;
-  onDeleteRequest?: (location: Location) => void;
 }
 
 export function MapView({
   locations,
+  selectedLocationId,
   onLocationSelect,
   onMapClick,
   trails = [],
   showTrails = false,
   onRightClickAdd,
-  userId,
-  userEmail,
-  adminEmail = '',
-  onDeleteRequest,
 }: MapViewProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
     libraries: LIBRARIES,
   });
 
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [selectedTrail, setSelectedTrail] = useState<HikingTrail | null>(null);
   const [searchMarker, setSearchMarker] = useState<{ lat: number; lng: number; name: string } | null>(null);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
@@ -132,12 +125,14 @@ export function MapView({
     if (placeId && mapRef.current) {
       const service = new google.maps.places.PlacesService(mapRef.current);
       service.getDetails(
-        { placeId, fields: ['name', 'formatted_address', 'types'] },
+        { placeId, fields: ['name', 'formatted_address', 'types', 'geometry'] },
         (place, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+            const placeLat = place.geometry?.location?.lat() ?? lat;
+            const placeLng = place.geometry?.location?.lng() ?? lng;
             onRightClickAdd({
-              lat,
-              lng,
+              lat: placeLat,
+              lng: placeLng,
               name: place.name ?? undefined,
               address: place.formatted_address ?? undefined,
               category: googleTypesToCategory(place.types ?? []),
@@ -158,43 +153,76 @@ export function MapView({
     }
   }, [onRightClickAdd]);
 
-  // Keep ref in sync for use inside event listener closure
+  // Keep ref in sync — used inside native event listener closures
   useEffect(() => {
     rightClickHandlerRef.current = handleRightClickAction;
   }, [handleRightClickAction]);
 
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
-    // Mobile long-press (Android + some iOS)
-    (map as any).addListener('long_press', (e: any) => {
-      if (e.latLng) rightClickHandlerRef.current?.(e.latLng.lat(), e.latLng.lng(), undefined);
-    });
-  }, []);
 
-  const handleMapRightClick = useCallback((e: google.maps.MapMouseEvent) => {
-    if (!e.latLng) return;
-    handleRightClickAction(e.latLng.lat(), e.latLng.lng(), (e as any).placeId);
-  }, [handleRightClickAction]);
+    // Native rightclick listener — more reliable than React prop for capturing placeId on POIs
+    map.addListener('rightclick', (e: any) => {
+      if (e.latLng) {
+        rightClickHandlerRef.current?.(e.latLng.lat(), e.latLng.lng(), e.placeId ?? undefined);
+      }
+    });
+
+    // Mobile long-press: record touch start, fire after 600ms if finger hasn't moved
+    const mapDiv = map.getDiv();
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    mapDiv.addEventListener('touchstart', (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        const rect = mapDiv.getBoundingClientRect();
+        const relX = touchStartX - rect.left;
+        const relY = touchStartY - rect.top;
+        const projection = map.getProjection();
+        const bounds = map.getBounds();
+        if (!projection || !bounds) return;
+        const ne = bounds.getNorthEast();
+        const sw = bounds.getSouthWest();
+        const nePx = projection.fromLatLngToPoint(ne)!;
+        const swPx = projection.fromLatLngToPoint(sw)!;
+        const worldX = swPx.x + (relX / rect.width) * (nePx.x - swPx.x);
+        const worldY = nePx.y + (relY / rect.height) * (swPx.y - nePx.y);
+        const latLng = projection.fromPointToLatLng(new google.maps.Point(worldX, worldY));
+        if (latLng) rightClickHandlerRef.current?.(latLng.lat(), latLng.lng(), undefined);
+      }, 600);
+    }, { passive: true });
+
+    mapDiv.addEventListener('touchend', () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }, { passive: true });
+
+    mapDiv.addEventListener('touchmove', (e: TouchEvent) => {
+      if (longPressTimer && e.touches.length === 1) {
+        const dx = Math.abs(e.touches[0].clientX - touchStartX);
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        if (dx > 8 || dy > 8) { clearTimeout(longPressTimer); longPressTimer = null; }
+      }
+    }, { passive: true });
+  }, []);
 
   const handleMapClick = useCallback((e: google.maps.MapMouseEvent) => {
     if (!e.latLng) return;
-    setSelectedLocation(null);
     setSelectedTrail(null);
     onMapClick(e.latLng.lat(), e.latLng.lng());
   }, [onMapClick]);
 
+  // Marker click opens detail panel directly — no intermediate tooltip
   const handleMarkerClick = useCallback((location: Location) => {
-    setSelectedLocation(location);
-    setSelectedTrail(null);
-  }, []);
-
-  const handleInfoWindowClose = useCallback(() => setSelectedLocation(null), []);
-  const handleTrailInfoClose = useCallback(() => setSelectedTrail(null), []);
-
-  const handleOpenDetail = useCallback((location: Location) => {
-    setSelectedLocation(null);
     onLocationSelect(location);
   }, [onLocationSelect]);
+
+  const handleTrailInfoClose = useCallback(() => setSelectedTrail(null), []);
 
   const handlePlaceChanged = useCallback(() => {
     const place = autocompleteRef.current?.getPlace();
@@ -274,82 +302,16 @@ export function MapView({
         options={MAP_OPTIONS}
         onLoad={handleMapLoad}
         onClick={handleMapClick}
-        onRightClick={handleMapRightClick}
       >
         {locations.map(location => (
           <Marker
             key={location.id}
             position={{ lat: location.lat, lng: location.lng }}
-            icon={createMarkerIcon(location.category, selectedLocation?.id === location.id)}
+            icon={createMarkerIcon(location.category, selectedLocationId === location.id)}
             title={location.name}
             onClick={() => handleMarkerClick(location)}
           />
         ))}
-
-        {selectedLocation && (() => {
-          const isOwner = !!(userId && selectedLocation.created_by === userId);
-          const isAdmin = !!(adminEmail && userEmail === adminEmail);
-          const canDelete = isOwner || isAdmin;
-          const catEmoji = CATEGORIES.find(c => c.value === selectedLocation.category)?.emoji ?? '📍';
-
-          return (
-            <InfoWindow
-              position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
-              onCloseClick={handleInfoWindowClose}
-              options={{ pixelOffset: new google.maps.Size(0, -12) }}
-            >
-              <div style={{ padding: '4px 2px', maxWidth: '260px', fontFamily: 'Inter, system-ui, sans-serif' }}>
-                {/* Title row */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '20px', lineHeight: 1, flexShrink: 0, marginTop: '2px' }}>{catEmoji}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontFamily: 'Georgia, serif', fontWeight: 700, color: '#3D2B1F', fontSize: '15px', lineHeight: 1.3, margin: '0 0 3px 0' }}>
-                      {selectedLocation.name}
-                    </h3>
-                    <CategoryBadge category={selectedLocation.category} size="sm" />
-                  </div>
-                  {canDelete && onDeleteRequest && (
-                    <button
-                      onClick={() => { handleInfoWindowClose(); onDeleteRequest(selectedLocation); }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '15px', padding: '0', opacity: 0.55, flexShrink: 0, marginLeft: '4px' }}
-                      title="Delete location"
-                    >
-                      🗑️
-                    </button>
-                  )}
-                </div>
-
-                {/* Rating */}
-                {selectedLocation.avg_rating != null ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '5px' }}>
-                    <StarRating rating={selectedLocation.avg_rating} size="sm" />
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#d97706' }}>
-                      {formatRating(selectedLocation.avg_rating)}
-                    </span>
-                    {(selectedLocation.review_count ?? 0) > 0 && (
-                      <span style={{ fontSize: '11px', color: '#9b8b80' }}>· {selectedLocation.review_count} review{selectedLocation.review_count !== 1 ? 's' : ''}</span>
-                    )}
-                  </div>
-                ) : (
-                  <p style={{ fontSize: '11px', color: '#9b8b80', margin: '0 0 5px 0' }}>No ratings yet</p>
-                )}
-
-                {selectedLocation.description && (
-                  <p style={{ fontSize: '12px', color: '#6b5b4e', margin: '0 0 8px 0', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>
-                    {selectedLocation.description}
-                  </p>
-                )}
-
-                <button
-                  onClick={() => handleOpenDetail(selectedLocation)}
-                  style={{ background: '#C4622D', color: '#fff', border: 'none', borderRadius: '20px', padding: '7px 0', fontSize: '12px', fontWeight: 600, cursor: 'pointer', width: '100%' }}
-                >
-                  View details & reviews →
-                </button>
-              </div>
-            </InfoWindow>
-          );
-        })()}
 
         {searchMarker && (
           <Marker

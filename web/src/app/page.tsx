@@ -17,8 +17,6 @@ import { FilterBar } from '@/components/Map/FilterBar';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@canaloni/shared';
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? '';
-
 // Dynamic import with SSR disabled (Google Maps requires browser APIs)
 const MapView = dynamic(
   () => import('@/components/Map/MapView').then(m => m.MapView),
@@ -142,10 +140,6 @@ export default function HomePage() {
     setSelectedLocation(null);
   }, [removeLocation]);
 
-  const handleDeleteFromMap = useCallback((location: Location) => {
-    removeLocation(location.id);
-  }, [removeLocation]);
-
   const statsText = (() => {
     if (showMyPins) return `${filteredLocations.length} of your pin${filteredLocations.length !== 1 ? 's' : ''}`;
     if (activeCategory !== 'all') return `${filteredLocations.length} in category`;
@@ -168,15 +162,12 @@ export default function HomePage() {
       <div className="absolute inset-0 top-16">
         <MapView
           locations={filteredLocations}
+          selectedLocationId={selectedLocation?.id}
           onLocationSelect={setSelectedLocation}
           onMapClick={() => {}}
           trails={trails}
           showTrails={showTrails}
           onRightClickAdd={handleRightClickAdd}
-          userId={user?.id ?? null}
-          userEmail={user?.email ?? null}
-          adminEmail={ADMIN_EMAIL}
-          onDeleteRequest={handleDeleteFromMap}
         />
       </div>
 
@@ -185,25 +176,30 @@ export default function HomePage() {
         <FilterBar
           activeCategory={activeCategory}
           onCategoryChange={cat => { setActiveCategory(cat); setShowMyPins(false); }}
-          showTrails={showTrails}
-          onToggleTrails={handleToggleTrails}
           showMyPins={showMyPins}
           onToggleMyPins={handleToggleMyPins}
         />
       </div>
 
-      {/* Floating trails toggle — top-left of map */}
+      {/* Premium Trails toggle — top-left of map */}
       <div className="absolute top-28 left-4 z-10">
-        <button
-          onClick={handleToggleTrails}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full shadow-tuscany text-xs font-semibold transition-colors ${
-            showTrails
-              ? 'bg-olive text-white'
-              : 'bg-white/95 text-brown border border-cream-dark hover:bg-white'
-          }`}
-        >
-          🥾 {showTrails ? 'Trails ON' : 'Trails'}
-        </button>
+        <div className="flex items-center gap-2.5 bg-white/95 backdrop-blur-sm rounded-full shadow-tuscany px-3.5 py-2 border border-cream-dark/60">
+          <span className="text-sm">🥾</span>
+          <span className="text-xs font-semibold text-brown">Trails</span>
+          <button
+            onClick={handleToggleTrails}
+            role="switch"
+            aria-checked={showTrails}
+            className="relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none"
+            style={{ background: showTrails ? 'linear-gradient(135deg, #5eead4 0%, #38bdf8 100%)' : '#d1d5db' }}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
+                showTrails ? 'translate-x-[22px]' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* FAB — Add location */}
