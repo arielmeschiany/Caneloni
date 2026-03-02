@@ -8,14 +8,12 @@ import { useLocations } from '@/hooks/useLocations';
 import { useAuth } from '@/hooks/useAuth';
 import { useGuest } from '@/hooks/useGuest';
 import { useHikingTrails } from '@/hooks/useHikingTrails';
-import { useImportedLists } from '@/hooks/useImportedLists';
 import { AddLocationModal } from '@/components/Map/AddLocationModal';
 import type { InitialPlace } from '@/components/Map/AddLocationModal';
 import { LocationDetail } from '@/components/Location/LocationDetail';
 import { AuthModal } from '@/components/Auth/AuthModal';
 import { Header } from '@/components/UI/Header';
 import { FilterBar } from '@/components/Map/FilterBar';
-import { ImportedListsPanel } from '@/components/Map/ImportedListsPanel';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@canaloni/shared';
 
@@ -37,10 +35,9 @@ const MapView = dynamic(
 
 export default function HomePage() {
   const { locations, loading: locationsLoading, addLocationOptimistic, removeLocation, refetch } = useLocations();
-  const { user, session, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { guestName, setGuestName } = useGuest();
   const { trails, fetchTrails } = useHikingTrails();
-  const { lists, addList, removeList } = useImportedLists();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
@@ -51,7 +48,6 @@ export default function HomePage() {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
-  const [highlightedListId, setHighlightedListId] = useState<string | null>(null);
 
   // Fetch profile when user changes
   useEffect(() => {
@@ -167,7 +163,6 @@ export default function HomePage() {
         <MapView
           locations={filteredLocations}
           selectedLocationId={selectedLocation?.id}
-          highlightedListId={highlightedListId}
           onLocationSelect={setSelectedLocation}
           onMapClick={() => {}}
           trails={trails}
@@ -186,9 +181,8 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Top-left controls column: Trails toggle + Imported Lists panel */}
-      <div className="absolute top-28 left-4 z-10 flex flex-col gap-2">
-        {/* Premium Trails toggle */}
+      {/* Premium Trails toggle — top-left of map */}
+      <div className="absolute top-28 left-4 z-10">
         <div className="flex items-center gap-2.5 bg-white/95 backdrop-blur-sm rounded-full shadow-tuscany px-3.5 py-2 border border-cream-dark/60">
           <span className="text-sm">🥾</span>
           <span className="text-xs font-semibold text-brown">Trails</span>
@@ -206,20 +200,6 @@ export default function HomePage() {
             />
           </button>
         </div>
-
-        {/* Imported Lists panel */}
-        <ImportedListsPanel
-          lists={lists}
-          highlightedListId={highlightedListId}
-          onHighlight={setHighlightedListId}
-          onListAdded={addList}
-          onListDeleted={id => { removeList(id); refetch(); }}
-          userId={user?.id}
-          userEmail={user?.email}
-          guestName={guestName}
-          session={session}
-          adminEmail={process.env.NEXT_PUBLIC_ADMIN_EMAIL}
-        />
       </div>
 
       {/* FAB — Add location */}
@@ -257,7 +237,6 @@ export default function HomePage() {
           onRefetch={refetch}
           guestName={guestName}
           username={profile?.username}
-          onHighlightList={id => { setHighlightedListId(id); setSelectedLocation(null); }}
         />
       )}
 

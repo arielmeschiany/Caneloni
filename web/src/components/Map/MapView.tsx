@@ -87,7 +87,6 @@ function googleTypesToCategory(types: string[]): Category | undefined {
 interface MapViewProps {
   locations: Location[];
   selectedLocationId?: string | null;
-  highlightedListId?: string | null;
   onLocationSelect: (location: Location) => void;
   onMapClick: (lat: number, lng: number) => void;
   trails?: HikingTrail[];
@@ -98,7 +97,6 @@ interface MapViewProps {
 export function MapView({
   locations,
   selectedLocationId,
-  highlightedListId,
   onLocationSelect,
   onMapClick,
   trails = [],
@@ -305,23 +303,15 @@ export function MapView({
         onLoad={handleMapLoad}
         onClick={handleMapClick}
       >
-        {locations.map(location => {
-          const isSelected = selectedLocationId === location.id;
-          const isDimmed = !!(
-            highlightedListId &&
-            location.imported_list_id !== highlightedListId &&
-            !isSelected
-          );
-          return (
-            <Marker
-              key={location.id}
-              position={{ lat: location.lat, lng: location.lng }}
-              icon={createMarkerIcon(location.category, isSelected, isDimmed)}
-              title={location.name}
-              onClick={() => handleMarkerClick(location)}
-            />
-          );
-        })}
+        {locations.map(location => (
+          <Marker
+            key={location.id}
+            position={{ lat: location.lat, lng: location.lng }}
+            icon={createMarkerIcon(location.category, selectedLocationId === location.id)}
+            title={location.name}
+            onClick={() => handleMarkerClick(location)}
+          />
+        ))}
 
         {searchMarker && (
           <Marker
