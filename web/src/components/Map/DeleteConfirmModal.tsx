@@ -1,5 +1,8 @@
 'use client';
 
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+
 interface DeleteConfirmModalProps {
   locationName: string;
   onConfirm: () => void;
@@ -7,8 +10,17 @@ interface DeleteConfirmModalProps {
 }
 
 export function DeleteConfirmModal({ locationName, onConfirm, onCancel }: DeleteConfirmModalProps) {
-  return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-brown/60 backdrop-blur-sm animate-fade-in">
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-tuscany-lg w-full max-w-sm mx-4 overflow-hidden animate-slide-up">
         <div className="px-6 py-5">
           <h3 className="text-lg font-serif font-bold text-brown mb-1">Delete Location?</h3>
@@ -34,6 +46,7 @@ export function DeleteConfirmModal({ locationName, onConfirm, onCancel }: Delete
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+  ) as unknown as React.ReactElement;
 }
