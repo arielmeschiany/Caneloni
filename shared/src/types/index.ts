@@ -29,10 +29,22 @@ export interface Location {
   created_by: string | null;
   created_at: string;
   guest_name?: string | null;
+  imported_list_id?: string | null;
   // Joined fields
   avg_rating?: number | null;
   review_count?: number;
   creator_username?: string | null;
+  imported_list_name?: string | null;
+}
+
+export interface ImportedList {
+  id: string;
+  name: string;
+  url: string | null;
+  imported_by: string | null;
+  guest_name: string | null;
+  location_count: number;
+  created_at: string;
 }
 
 export interface Review {

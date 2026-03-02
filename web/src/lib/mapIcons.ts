@@ -48,13 +48,14 @@ const PIN_DEFS: Record<Category, PinDef> = {
  *  - Shadow: semi-transparent copies offset by (1, 2)
  *  - Emoji centered at (20, 20)
  */
-function buildPinSvg(emoji: string, color: string): string {
+function buildPinSvg(emoji: string, color: string, dimmed = false): string {
+  const opacity = dimmed ? '0.35' : '1';
   // Shadow shapes (drawn first, offset)
   const shadow = `
     <polygon points="14,34 26,34 20,48" fill="rgba(0,0,0,0.22)" transform="translate(1,2)"/>
     <circle cx="20" cy="20" r="18" fill="rgba(0,0,0,0.22)" transform="translate(1,2)"/>`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="50" viewBox="0 0 40 50">${shadow}
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="50" viewBox="0 0 40 50" opacity="${opacity}">${shadow}
   <polygon points="14,34 26,34 20,48" fill="${color}"/>
   <circle cx="20" cy="20" r="18" fill="white"/>
   <circle cx="20" cy="20" r="16" fill="${color}"/>
@@ -67,13 +68,14 @@ function buildPinSvg(emoji: string, color: string): string {
  *
  * @param category  Location category value
  * @param selected  When true, renders at 1.15× scale for the selected/active state
+ * @param dimmed    When true, renders at 0.7× opacity (used when another list is highlighted)
  */
-export function createMarkerIcon(category: string, selected = false): google.maps.Icon {
+export function createMarkerIcon(category: string, selected = false, dimmed = false): google.maps.Icon {
   const def = PIN_DEFS[category as Category] ?? PIN_DEFS.sightseeing;
-  const scale = selected ? 1.15 : 1;
+  const scale = selected ? 1.15 : dimmed ? 0.8 : 1;
   const w = Math.round(40 * scale);
   const h = Math.round(50 * scale);
-  const svg = buildPinSvg(def.emoji, def.color);
+  const svg = buildPinSvg(def.emoji, def.color, dimmed);
 
   return {
     url: `data:image/svg+xml,${encodeURIComponent(svg)}`,

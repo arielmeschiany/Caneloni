@@ -44,6 +44,7 @@ interface LocationDetailProps {
   onRefetch?: () => void;
   guestName?: string | null;
   username?: string | null;
+  onHighlightList?: (listId: string) => void;
 }
 
 export function LocationDetail({
@@ -54,6 +55,7 @@ export function LocationDetail({
   onRefetch,
   guestName,
   username,
+  onHighlightList,
 }: LocationDetailProps) {
   const { user, session } = useAuth();
   const { hasCheckedIn, count: checkInCount, loading: checkInLoading, toggle: toggleCheckIn, canCheckIn } = useCheckIn(location.id, guestName);
@@ -312,7 +314,18 @@ export function LocationDetail({
 
             {/* Name + category */}
             <div className="pt-4 pb-3 border-b border-cream-dark">
-              <CategoryBadge category={displayLocation.category} size="sm" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <CategoryBadge category={displayLocation.category} size="sm" />
+                {location.imported_list_name && location.imported_list_id && (
+                  <button
+                    onClick={() => onHighlightList?.(location.imported_list_id!)}
+                    className="inline-flex items-center gap-1 text-[10px] font-medium bg-terracotta/10 text-terracotta rounded-full px-2 py-0.5 hover:bg-terracotta/20 transition-colors"
+                    title="Highlight all locations from this list on the map"
+                  >
+                    📋 {location.imported_list_name}
+                  </button>
+                )}
+              </div>
               <h2 className="text-[22px] font-serif font-bold text-brown mt-1.5 leading-tight">
                 {displayLocation.name}
               </h2>
