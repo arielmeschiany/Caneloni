@@ -79,3 +79,83 @@ export async function DELETE(
 
   return NextResponse.json({ success: true });
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const userClient = createClient(supabaseUrl, anonKey);
+  const { data: { user }, error: authError } = await userClient.auth.getUser(token);
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const privilegedClient = serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : (supabase as any);
+
+  const { data: location, error: fetchError } = await privilegedClient
+    .from('locations')
+    .select('created_by')
+    .eq('id', params.id)
+    .single();
+
+  if (fetchError || !location) {
+    return NextResponse.json({ error: 'Location not found' }, { status: 404 });
+  }
+
+  const isOwner = location.created_by === user.id;
+  const isAdmin = ADMIN_EMAIL !== '' && user.email === ADMIN_EMAIL;
+
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { name, category, description, photo_url } = body;
+
+  if (!name || !category) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  const validCategories = [
+    'pizzeria', 'classic_italian', 'beef_meat', 'seafood', 'vineyards',
+    'hotels', 'sightseeing', 'views_panoramas', 'beaches', 'walking_trails',
+    'mountains', 'home_residential', 'museums_galleries', 'local_markets',
+    'pharmacy', 'taxi_station', 'train_station', 'shopping',
+  ];
+  if (!validCategories.includes(category)) {
+    return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+  }
+
+  const { data: updated, error: updateError } = await privilegedClient
+    .from('locations')
+    .update({
+      name,
+      category,
+      description: description ?? null,
+      photo_url: photo_url ?? null,
+    })
+    .eq('id', params.id)
+    .select('*')
+    .single();
+
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  return NextResponse.json(updated);
+}

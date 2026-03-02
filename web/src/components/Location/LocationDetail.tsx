@@ -11,6 +11,7 @@ import { CategoryBadge } from '@/components/UI/CategoryBadge';
 import { StarRating } from '@/components/UI/StarRating';
 import { ReviewForm } from './ReviewForm';
 import { DeleteConfirmModal } from '@/components/Map/DeleteConfirmModal';
+import { EditLocationModal } from '@/components/Map/EditLocationModal';
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? '';
 
@@ -60,9 +61,12 @@ export function LocationDetail({
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [localReviewCount, setLocalReviewCount] = useState(location.review_count ?? 0);
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [displayLocation, setDisplayLocation] = useState(location);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [successToast, setSuccessToast] = useState(false);
 
   // Review edit/delete state
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
@@ -75,8 +79,15 @@ export function LocationDetail({
   const isOwner = !!(user && location.created_by && user.id === location.created_by);
   const canDelete = isOwner || isAdmin;
 
-  const categoryEmoji = CATEGORIES.find(c => c.value === location.category)?.emoji ?? '📍';
-  const categoryGradient = CATEGORY_GRADIENTS[location.category] ?? CATEGORY_GRADIENTS.classic_italian;
+  const categoryEmoji = CATEGORIES.find(c => c.value === displayLocation.category)?.emoji ?? '📍';
+  const categoryGradient = CATEGORY_GRADIENTS[displayLocation.category] ?? CATEGORY_GRADIENTS.classic_italian;
+
+  // Auto-dismiss success toast
+  useEffect(() => {
+    if (!successToast) return;
+    const t = setTimeout(() => setSuccessToast(false), 3000);
+    return () => clearTimeout(t);
+  }, [successToast]);
 
   const fetchReviews = useCallback(async () => {
     setLoadingReviews(true);
@@ -152,6 +163,11 @@ export function LocationDetail({
       setDeleteError(body.error ?? 'Failed to delete location.');
     }
   }, [session, location.id, onLocationDeleted, onClose, onRefetch]);
+
+  const handleEditSuccess = useCallback((updated: Location) => {
+    setDisplayLocation(updated);
+    setSuccessToast(true);
+  }, []);
 
   const canManageReview = useCallback((review: Review) => {
     if (isAdmin) return true;
@@ -232,10 +248,10 @@ export function LocationDetail({
 
           {/* Photo / gradient banner */}
           <div className="relative shrink-0 h-52 sm:h-60 overflow-hidden rounded-t-3xl sm:rounded-none">
-            {location.photo_url ? (
+            {displayLocation.photo_url ? (
               <Image
-                src={location.photo_url}
-                alt={location.name}
+                src={displayLocation.photo_url}
+                alt={displayLocation.name}
                 fill
                 className="object-cover"
                 sizes="(max-width: 640px) 100vw, 420px"
@@ -257,14 +273,23 @@ export function LocationDetail({
             {/* Top-right controls overlaid on image */}
             <div className="absolute top-3 right-3 flex gap-2">
               {canDelete && (
-                <button
-                  onClick={() => setShowDeleteModal(true)}
-                  disabled={deleting}
-                  className="w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow text-red-400 hover:text-red-600 text-sm transition-colors"
-                  title="Delete this location"
-                >
-                  🗑️
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowEditModal(true)}
+                    className="w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow text-brown/60 hover:text-brown text-sm transition-colors"
+                    title="Edit this location"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    disabled={deleting}
+                    className="w-9 h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow text-red-400 hover:text-red-600 text-sm transition-colors"
+                    title="Delete this location"
+                  >
+                    🗑️
+                  </button>
+                </>
               )}
               <button
                 onClick={onClose}
@@ -278,11 +303,18 @@ export function LocationDetail({
           {/* Scrollable content */}
           <div className="overflow-y-auto flex-1 px-5 pb-8">
 
+            {/* Success toast */}
+            {successToast && (
+              <div className="mt-3 mb-0 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-2.5 text-sm font-medium animate-fade-in">
+                Location updated! ✓
+              </div>
+            )}
+
             {/* Name + category */}
             <div className="pt-4 pb-3 border-b border-cream-dark">
-              <CategoryBadge category={location.category} size="sm" />
+              <CategoryBadge category={displayLocation.category} size="sm" />
               <h2 className="text-[22px] font-serif font-bold text-brown mt-1.5 leading-tight">
-                {location.name}
+                {displayLocation.name}
               </h2>
 
               {/* Stats row */}
@@ -307,9 +339,9 @@ export function LocationDetail({
             </div>
 
             {/* Description */}
-            {location.description && (
+            {displayLocation.description && (
               <p className="text-brown/70 text-sm leading-relaxed py-3 border-b border-cream-dark">
-                {location.description}
+                {displayLocation.description}
               </p>
             )}
 
@@ -466,9 +498,17 @@ export function LocationDetail({
 
       {showDeleteModal && (
         <DeleteConfirmModal
-          locationName={location.name}
+          locationName={displayLocation.name}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setShowDeleteModal(false)}
+        />
+      )}
+
+      {showEditModal && (
+        <EditLocationModal
+          location={displayLocation}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={handleEditSuccess}
         />
       )}
     </>
