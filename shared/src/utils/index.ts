@@ -18,6 +18,7 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   pharmacy:          '#2A8A4A',
   taxi_station:      '#F5C842',
   train_station:     '#4A4A4A',
+  shopping:          '#E8A0BF',
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -38,6 +39,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   pharmacy:          'Pharmacy',
   taxi_station:      'Taxi Station',
   train_station:     'Train Station',
+  shopping:          'Shopping',
 };
 
 export const CATEGORY_EMOJIS: Record<Category, string> = {
@@ -58,6 +60,7 @@ export const CATEGORY_EMOJIS: Record<Category, string> = {
   pharmacy:          '💊',
   taxi_station:      '🚕',
   train_station:     '🚂',
+  shopping:          '🛍️',
 };
 
 export function getCategoryColor(category: Category): string {

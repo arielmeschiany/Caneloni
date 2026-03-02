@@ -21,6 +21,7 @@ const SHORT_LABELS: Record<Category, string> = {
   pharmacy: 'Pharmacy',
   taxi_station: 'Taxi',
   train_station: 'Train',
+  shopping:      'Shopping',
 };
 
 interface FilterBarProps {

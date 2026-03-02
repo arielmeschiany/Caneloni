@@ -15,7 +15,8 @@ export type Category =
   | 'local_markets'
   | 'pharmacy'
   | 'taxi_station'
-  | 'train_station';
+  | 'train_station'
+  | 'shopping';
 
 export interface Location {
   id: string;
@@ -95,6 +96,7 @@ export const CATEGORIES: { value: Category; label: string; emoji: string }[] = [
   { value: 'pharmacy',          label: 'Pharmacy',            emoji: '💊' },
   { value: 'taxi_station',      label: 'Taxi Station',        emoji: '🚕' },
   { value: 'train_station',     label: 'Train Station',       emoji: '🚂' },
+  { value: 'shopping',          label: 'Shopping',            emoji: '🛍️' },
 ];
 
 export const TUSCANY_CENTER = {

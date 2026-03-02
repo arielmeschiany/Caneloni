@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     'pizzeria', 'classic_italian', 'beef_meat', 'seafood', 'vineyards',
     'hotels', 'sightseeing', 'views_panoramas', 'beaches', 'walking_trails',
     'mountains', 'home_residential', 'museums_galleries', 'local_markets',
-    'pharmacy', 'taxi_station', 'train_station',
+    'pharmacy', 'taxi_station', 'train_station', 'shopping',
   ];
   if (!validCategories.includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 });

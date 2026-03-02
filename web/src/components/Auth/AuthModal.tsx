@@ -59,8 +59,10 @@ export function AuthModal({ onClose, defaultMode = 'sign-in', onContinueAsGuest 
     setSuccessMsg(null);
 
     if (mode === 'guest') {
-      if (!guestNameInput.trim()) { setError('Please enter a display name.'); return; }
-      onContinueAsGuest?.(guestNameInput.trim());
+      const trimmed = guestNameInput.trim();
+      if (!trimmed) { setError('Please enter a display name.'); return; }
+      if (trimmed.length < 2) { setError('Name must be at least 2 characters.'); return; }
+      onContinueAsGuest?.(trimmed);
       return;
     }
 
@@ -223,6 +225,7 @@ export function AuthModal({ onClose, defaultMode = 'sign-in', onContinueAsGuest 
                     placeholder="e.g. Marco from Florence"
                     className="input-field"
                     required
+                    minLength={2}
                     maxLength={60}
                     autoFocus
                   />

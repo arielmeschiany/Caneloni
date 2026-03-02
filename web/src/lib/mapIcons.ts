@@ -35,6 +35,7 @@ const PIN_DEFS: Record<Category, PinDef> = {
   pharmacy:          { emoji: '💊', color: '#2A8A4A' },
   taxi_station:      { emoji: '🚕', color: '#F5C842' },
   train_station:     { emoji: '🚂', color: '#4A4A4A' },
+  shopping:          { emoji: '🛍️', color: '#E8A0BF' },
 };
 
 /**

@@ -32,6 +32,7 @@ const CATEGORY_GRADIENTS: Record<Category, string> = {
   pharmacy:          'linear-gradient(135deg, #1ABC9C 0%, #148F77 100%)',
   taxi_station:      'linear-gradient(135deg, #D4AC0D 0%, #B7950B 100%)',
   train_station:     'linear-gradient(135deg, #7F8C8D 0%, #4D5656 100%)',
+  shopping:          'linear-gradient(135deg, #E8A0BF 0%, #C4607A 100%)',
 };
 
 interface LocationDetailProps {
@@ -62,6 +63,13 @@ export function LocationDetail({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Review edit/delete state
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(0);
+  const [editComment, setEditComment] = useState('');
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
+  const [reviewActionError, setReviewActionError] = useState<string | null>(null);
 
   const isAdmin = !!(user?.email && ADMIN_EMAIL && user.email === ADMIN_EMAIL);
   const isOwner = !!(user && location.created_by && user.id === location.created_by);
@@ -144,6 +152,64 @@ export function LocationDetail({
       setDeleteError(body.error ?? 'Failed to delete location.');
     }
   }, [session, location.id, onLocationDeleted, onClose, onRefetch]);
+
+  const canManageReview = useCallback((review: Review) => {
+    if (isAdmin) return true;
+    if (user && review.user_id === user.id) return true;
+    if (!user && guestName && review.guest_name === guestName) return true;
+    return false;
+  }, [isAdmin, user, guestName]);
+
+  const startEditReview = useCallback((review: Review) => {
+    setEditingReviewId(review.id);
+    setEditRating(review.rating);
+    setEditComment(review.comment ?? '');
+    setDeletingReviewId(null);
+    setReviewActionError(null);
+  }, []);
+
+  const handleSaveEdit = useCallback(async (review: Review) => {
+    const isMyOwnAuthReview = !!(user && review.user_id === user.id && !isAdmin);
+    setReviews(rs => rs.map(r => r.id === review.id ? { ...r, rating: editRating, comment: editComment } : r));
+    setEditingReviewId(null);
+    try {
+      if (isMyOwnAuthReview) {
+        const { error } = await (supabase as any).from('reviews').update({ rating: editRating, comment: editComment }).eq('id', review.id);
+        if (error) throw error;
+      } else {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+        if (!user && guestName) headers['x-guest-name'] = guestName;
+        const res = await fetch(`/api/reviews/${review.id}`, { method: 'PATCH', headers, body: JSON.stringify({ rating: editRating, comment: editComment }) });
+        if (!res.ok) throw new Error('Failed to update');
+      }
+    } catch {
+      setReviews(rs => rs.map(r => r.id === review.id ? review : r));
+      setReviewActionError('Failed to save changes.');
+    }
+  }, [user, isAdmin, session, guestName, editRating, editComment]);
+
+  const handleDeleteReview = useCallback(async (review: Review) => {
+    const isMyOwnAuthReview = !!(user && review.user_id === user.id && !isAdmin);
+    setReviews(rs => rs.filter(r => r.id !== review.id));
+    setLocalReviewCount(c => c - 1);
+    setDeletingReviewId(null);
+    try {
+      if (isMyOwnAuthReview) {
+        const { error } = await (supabase as any).from('reviews').delete().eq('id', review.id);
+        if (error) throw error;
+      } else {
+        const headers: Record<string, string> = {};
+        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+        if (!user && guestName) headers['x-guest-name'] = guestName;
+        const res = await fetch(`/api/reviews/${review.id}`, { method: 'DELETE', headers });
+        if (!res.ok) throw new Error('Failed to delete');
+      }
+    } catch {
+      onRefetch?.();
+      setReviewActionError('Failed to delete review.');
+    }
+  }, [user, isAdmin, session, guestName, onRefetch]);
 
   const avgRating = location.avg_rating ?? null;
 
@@ -329,22 +395,66 @@ export function LocationDetail({
                   No reviews yet — be the first! ✨
                 </p>
               ) : (
-                <div className="divide-y divide-cream-dark">
+                <div>
+                  {reviewActionError && (
+                    <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{reviewActionError}</p>
+                  )}
                   {reviews.map(review => (
-                    <div key={review.id} className="flex gap-3 py-3.5">
-                      <div className="w-9 h-9 rounded-full bg-terracotta/15 flex items-center justify-center shrink-0 text-terracotta font-bold text-sm">
-                        {(review.username ?? 'G').slice(0, 1).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <span className="text-sm font-semibold text-brown leading-tight">{review.username ?? 'Guest'}</span>
-                          <span className="text-xs text-brown/40 shrink-0">{formatDate(review.created_at)}</span>
+                    <div key={review.id} className="py-3.5 border-b border-cream-dark last:border-b-0">
+                      {editingReviewId === review.id ? (
+                        <div className="space-y-2">
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button key={star} type="button" onClick={() => setEditRating(star)}
+                                className={`text-2xl transition-colors ${star <= editRating ? 'text-amber-400' : 'text-brown/20'}`}>★</button>
+                            ))}
+                          </div>
+                          <textarea value={editComment} onChange={e => setEditComment(e.target.value)}
+                            rows={3} maxLength={500} className="input-field resize-none text-sm" />
+                          <div className="flex gap-2">
+                            <button onClick={() => handleSaveEdit(review)}
+                              className="flex-1 py-1.5 rounded-lg bg-terracotta text-white text-xs font-semibold hover:bg-terracotta-dark transition-colors">Save</button>
+                            <button onClick={() => setEditingReviewId(null)}
+                              className="flex-1 py-1.5 rounded-lg border border-brown/20 text-brown text-xs font-medium hover:bg-cream transition-colors">Cancel</button>
+                          </div>
                         </div>
-                        <StarRating rating={review.rating} size="sm" />
-                        {review.comment && (
-                          <p className="text-sm text-brown/70 mt-1 leading-relaxed">{review.comment}</p>
-                        )}
-                      </div>
+                      ) : deletingReviewId === review.id ? (
+                        <div className="bg-red-50 rounded-xl p-3 space-y-2">
+                          <p className="text-sm font-medium text-red-700">Delete this review?</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleDeleteReview(review)}
+                              className="flex-1 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors">Yes, delete</button>
+                            <button onClick={() => setDeletingReviewId(null)}
+                              className="flex-1 py-1.5 rounded-lg border border-brown/20 text-brown text-xs font-medium hover:bg-cream transition-colors">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-3">
+                          <div className="w-9 h-9 rounded-full bg-terracotta/15 flex items-center justify-center shrink-0 text-terracotta font-bold text-sm">
+                            {(review.username ?? 'G').slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1 mb-0.5">
+                              <span className="text-sm font-semibold text-brown leading-tight">{review.username ?? 'Guest'}</span>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <span className="text-xs text-brown/40">{formatDate(review.created_at)}</span>
+                                {canManageReview(review) && (
+                                  <>
+                                    <button onClick={() => startEditReview(review)}
+                                      className="text-brown/30 hover:text-brown/70 text-sm px-0.5 transition-colors" title="Edit">✏️</button>
+                                    <button onClick={() => setDeletingReviewId(review.id)}
+                                      className="text-brown/30 hover:text-red-500 text-sm px-0.5 transition-colors" title="Delete">🗑️</button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <StarRating rating={review.rating} size="sm" />
+                            {review.comment && (
+                              <p className="text-sm text-brown/70 mt-1 leading-relaxed">{review.comment}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
