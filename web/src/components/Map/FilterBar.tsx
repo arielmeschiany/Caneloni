@@ -28,9 +28,11 @@ interface FilterBarProps {
   onCategoryChange: (cat: Category | 'all') => void;
   showTrails: boolean;
   onToggleTrails: () => void;
+  showMyPins: boolean;
+  onToggleMyPins: () => void;
 }
 
-export function FilterBar({ activeCategory, onCategoryChange, showTrails, onToggleTrails }: FilterBarProps) {
+export function FilterBar({ activeCategory, onCategoryChange, showTrails, onToggleTrails, showMyPins, onToggleMyPins }: FilterBarProps) {
   return (
     <nav className="flex items-center gap-1.5 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       {/* All button */}
@@ -73,6 +75,18 @@ export function FilterBar({ activeCategory, onCategoryChange, showTrails, onTogg
         }`}
       >
         🥾 Trails
+      </button>
+
+      {/* My Pins toggle */}
+      <button
+        onClick={onToggleMyPins}
+        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+          showMyPins
+            ? 'bg-brown text-white'
+            : 'bg-white/90 text-brown hover:bg-white'
+        }`}
+      >
+        📍 My Pins
       </button>
     </nav>
   );

@@ -37,13 +37,22 @@ export interface Location {
 export interface Review {
   id: string;
   location_id: string;
-  user_id: string;
+  user_id: string | null;
+  guest_name?: string | null;
   rating: number;
   comment: string | null;
   created_at: string;
   // Joined fields
   username?: string | null;
   avatar_url?: string | null;
+}
+
+export interface CheckIn {
+  id: string;
+  location_id: string;
+  user_id: string | null;
+  guest_name: string | null;
+  visited_at: string;
 }
 
 export interface Profile {

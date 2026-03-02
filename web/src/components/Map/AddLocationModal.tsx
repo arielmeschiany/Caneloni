@@ -20,21 +20,34 @@ interface ResolvedPlace {
   address: string;
 }
 
-interface AddLocationModalProps {
-  onClose: () => void;
-  onSuccess: (location: any) => void;
-  onAuthRequired: () => void;
+export interface InitialPlace {
+  lat: number;
+  lng: number;
+  address?: string;
+  name?: string;
+  category?: Category;
 }
 
-export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLocationModalProps) {
+interface AddLocationModalProps {
+  onClose: () => void;
+  onSuccess: (payload: any) => void;
+  onAuthRequired: () => void;
+  initialPlace?: InitialPlace;
+}
+
+export function AddLocationModal({ onClose, onSuccess, onAuthRequired, initialPlace }: AddLocationModalProps) {
   const { user } = useAuth();
   const { guestName } = useGuest();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<Category>('pizzeria');
+  const [name, setName] = useState(initialPlace?.name ?? '');
+  const [category, setCategory] = useState<Category>(initialPlace?.category ?? 'pizzeria');
   const [description, setDescription] = useState('');
-  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(null);
+  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(
+    initialPlace
+      ? { lat: initialPlace.lat, lng: initialPlace.lng, address: initialPlace.address ?? `${initialPlace.lat.toFixed(5)}, ${initialPlace.lng.toFixed(5)}` }
+      : null
+  );
   const [uploading, setUploading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -54,6 +67,11 @@ export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLoca
       strictBounds: false,
     });
 
+    // Pre-fill the input if we have an address from right-click
+    if (initialPlace?.address && inputRef.current) {
+      inputRef.current.value = initialPlace.address;
+    }
+
     ac.addListener('place_changed', () => {
       const place = ac.getPlace();
       if (!place?.geometry?.location) return;
@@ -61,16 +79,12 @@ export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLoca
       const lng = place.geometry.location.lng();
       const address = place.formatted_address ?? place.name ?? '';
       setResolvedPlace({ lat, lng, address });
-      // Pre-fill name if still empty
-      if (!name && place.name) {
-        setName(place.name);
-      }
+      if (!name && place.name) setName(place.name);
     });
 
     return () => {
       window.google.maps.event.clearInstanceListeners(ac);
     };
-    // Only run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -118,7 +132,6 @@ export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLoca
     };
 
     setLoading(false);
-    // Pass payload to parent for optimistic insert; close immediately
     onSuccess(payload);
     onClose();
   };
@@ -134,7 +147,7 @@ export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLoca
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-cream-dark">
           <h2 className="text-lg font-serif font-bold text-brown">📍 Pin a Location</h2>
-          <button onClick={onClose} className="text-brown/40 hover:text-brown text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-brown/40 hover:text-brown text-2xl leading-none w-9 h-9 flex items-center justify-center">×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
@@ -212,12 +225,7 @@ export function AddLocationModal({ onClose, onSuccess, onAuthRequired }: AddLoca
               <span className="text-sm text-brown/60">
                 {photoFile ? photoFile.name : 'Choose a photo'}
               </span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoChange}
-                className="hidden"
-              />
+              <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
             </label>
           </div>
 

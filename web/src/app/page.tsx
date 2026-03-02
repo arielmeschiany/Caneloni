@@ -9,12 +9,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { useGuest } from '@/hooks/useGuest';
 import { useHikingTrails } from '@/hooks/useHikingTrails';
 import { AddLocationModal } from '@/components/Map/AddLocationModal';
+import type { InitialPlace } from '@/components/Map/AddLocationModal';
 import { LocationDetail } from '@/components/Location/LocationDetail';
 import { AuthModal } from '@/components/Auth/AuthModal';
 import { Header } from '@/components/UI/Header';
 import { FilterBar } from '@/components/Map/FilterBar';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@canaloni/shared';
+
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? '';
 
 // Dynamic import with SSR disabled (Google Maps requires browser APIs)
 const MapView = dynamic(
@@ -41,7 +44,9 @@ export default function HomePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [showTrails, setShowTrails] = useState(false);
+  const [showMyPins, setShowMyPins] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [rightClickPlace, setRightClickPlace] = useState<InitialPlace | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -64,15 +69,31 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, [globalError]);
 
-  const filteredLocations = activeCategory === 'all'
-    ? locations
-    : locations.filter(l => l.category === activeCategory);
+  // Filter locations: category → my pins
+  const filteredLocations = (() => {
+    let list = activeCategory === 'all'
+      ? locations
+      : locations.filter(l => l.category === activeCategory);
+
+    if (showMyPins) {
+      if (user) {
+        list = list.filter(l => l.created_by === user.id);
+      } else if (guestName) {
+        list = list.filter(l => (l as any).guest_name === guestName);
+      } else {
+        list = [];
+      }
+    }
+
+    return list;
+  })();
 
   const handleAddButtonClick = useCallback(() => {
     if (!user && !guestName) {
       setShowAuthModal(true);
       return;
     }
+    setRightClickPlace(null);
     setShowAddModal(true);
   }, [user, guestName]);
 
@@ -88,13 +109,28 @@ export default function HomePage() {
     });
   }, [fetchTrails]);
 
+  const handleToggleMyPins = useCallback(() => {
+    setShowMyPins(prev => !prev);
+    // Clear category filter when toggling My Pins for cleaner UX
+    setActiveCategory('all');
+  }, []);
+
+  const handleRightClickAdd = useCallback((place: InitialPlace) => {
+    if (!user && !guestName) {
+      setShowAuthModal(true);
+      return;
+    }
+    setRightClickPlace(place);
+    setShowAddModal(true);
+  }, [user, guestName]);
+
   const handleAddSuccess = useCallback(async (payload: any) => {
     // Modal has already closed itself; now optimistically insert
     try {
       await addLocationOptimistic(
         payload,
         user?.id ?? null,
-        !user && guestName ? `${guestName} (Guest)` : null
+        !user && guestName ? guestName : null
       );
     } catch (err: any) {
       setGlobalError(err.message ?? 'Failed to save location. Please try again.');
@@ -105,6 +141,16 @@ export default function HomePage() {
     removeLocation(id);
     setSelectedLocation(null);
   }, [removeLocation]);
+
+  const handleDeleteFromMap = useCallback((location: Location) => {
+    removeLocation(location.id);
+  }, [removeLocation]);
+
+  const statsText = (() => {
+    if (showMyPins) return `${filteredLocations.length} of your pin${filteredLocations.length !== 1 ? 's' : ''}`;
+    if (activeCategory !== 'all') return `${filteredLocations.length} in category`;
+    return `${filteredLocations.length} location${filteredLocations.length !== 1 ? 's' : ''} pinned`;
+  })();
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-cream">
@@ -126,6 +172,11 @@ export default function HomePage() {
           onMapClick={() => {}}
           trails={trails}
           showTrails={showTrails}
+          onRightClickAdd={handleRightClickAdd}
+          userId={user?.id ?? null}
+          userEmail={user?.email ?? null}
+          adminEmail={ADMIN_EMAIL}
+          onDeleteRequest={handleDeleteFromMap}
         />
       </div>
 
@@ -133,17 +184,18 @@ export default function HomePage() {
       <div className="absolute top-16 left-0 right-0 z-10 px-3 py-2">
         <FilterBar
           activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
+          onCategoryChange={cat => { setActiveCategory(cat); setShowMyPins(false); }}
           showTrails={showTrails}
           onToggleTrails={handleToggleTrails}
+          showMyPins={showMyPins}
+          onToggleMyPins={handleToggleMyPins}
         />
       </div>
 
       {/* Stats pill */}
       <div className="absolute top-28 left-4 z-10">
         <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-tuscany px-3 py-1.5 text-xs text-brown/60 font-medium">
-          {filteredLocations.length} location{filteredLocations.length !== 1 ? 's' : ''}
-          {activeCategory !== 'all' ? ' in category' : ' pinned'}
+          {statsText}
         </div>
       </div>
 
@@ -166,9 +218,10 @@ export default function HomePage() {
       {/* Modals */}
       {showAddModal && (
         <AddLocationModal
-          onClose={() => setShowAddModal(false)}
+          onClose={() => { setShowAddModal(false); setRightClickPlace(null); }}
           onSuccess={handleAddSuccess}
           onAuthRequired={handleAuthRequired}
+          initialPlace={rightClickPlace ?? undefined}
         />
       )}
 
@@ -179,6 +232,7 @@ export default function HomePage() {
           onAuthRequired={handleAuthRequired}
           onLocationDeleted={handleLocationDeleted}
           onRefetch={refetch}
+          guestName={guestName}
         />
       )}
 
