@@ -192,11 +192,18 @@ export default function HomePage() {
         />
       </div>
 
-      {/* Stats pill */}
+      {/* Floating trails toggle — top-left of map */}
       <div className="absolute top-28 left-4 z-10">
-        <div className="bg-white/90 backdrop-blur-sm rounded-full shadow-tuscany px-3 py-1.5 text-xs text-brown/60 font-medium">
-          {statsText}
-        </div>
+        <button
+          onClick={handleToggleTrails}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full shadow-tuscany text-xs font-semibold transition-colors ${
+            showTrails
+              ? 'bg-olive text-white'
+              : 'bg-white/95 text-brown border border-cream-dark hover:bg-white'
+          }`}
+        >
+          🥾 {showTrails ? 'Trails ON' : 'Trails'}
+        </button>
       </div>
 
       {/* FAB — Add location */}
@@ -233,6 +240,7 @@ export default function HomePage() {
           onLocationDeleted={handleLocationDeleted}
           onRefetch={refetch}
           guestName={guestName}
+          username={profile?.username}
         />
       )}
 

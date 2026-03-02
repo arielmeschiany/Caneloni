@@ -1,20 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import type { Review } from '@canaloni/shared';
 import { StarRating } from '@/components/UI/StarRating';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ReviewFormProps {
   locationId: string;
-  onSuccess: () => void;
+  onSuccess: (review: Review) => void;
   onAuthRequired: () => void;
   guestName?: string | null;
+  username?: string | null;
 }
 
 type Mode = 'choose' | 'guest-name' | 'form';
 
-export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }: ReviewFormProps) {
+export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName, username }: ReviewFormProps) {
   const { user } = useAuth();
 
   const initialMode: Mode = user ? 'form' : guestName ? 'form' : 'choose';
@@ -24,7 +26,6 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const effectiveName = user ? null : (guestName || localGuestName || null);
 
@@ -35,52 +36,67 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
     setLoading(true);
     setError(null);
 
+    let reviewData: any = null;
     let submitError: any = null;
 
     if (user) {
-      // Authenticated: upsert (one review per user per location)
-      const { error } = await supabase.from('reviews').upsert({
-        location_id: locationId,
-        user_id: user.id,
-        rating,
-        comment: comment.trim() || null,
-      });
-      submitError = error;
+      // Check if user already reviewed this location
+      const { data: existing } = await (supabase as any)
+        .from('reviews')
+        .select('id')
+        .eq('location_id', locationId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing review
+        const { data, error: err } = await (supabase as any)
+          .from('reviews')
+          .update({ rating, comment: comment.trim() || null })
+          .eq('id', existing.id)
+          .select('*')
+          .single();
+        reviewData = data;
+        submitError = err;
+      } else {
+        // Insert new review
+        const { data, error: err } = await (supabase as any)
+          .from('reviews')
+          .insert({ location_id: locationId, user_id: user.id, rating, comment: comment.trim() || null })
+          .select('*')
+          .single();
+        reviewData = data;
+        submitError = err;
+      }
     } else {
-      // Guest: insert
-      const { error } = await (supabase as any).from('reviews').insert({
-        location_id: locationId,
-        user_id: null,
-        guest_name: effectiveName,
-        rating,
-        comment: comment.trim() || null,
-      });
-      submitError = error;
+      // Guest insert
+      const { data, error: err } = await (supabase as any)
+        .from('reviews')
+        .insert({ location_id: locationId, user_id: null, guest_name: effectiveName, rating, comment: comment.trim() || null })
+        .select('*')
+        .single();
+      reviewData = data;
+      submitError = err;
     }
 
     setLoading(false);
 
-    if (submitError) {
-      setError(submitError.message);
+    if (submitError || !reviewData) {
+      setError(submitError?.message ?? 'Failed to post review. Please try again.');
     } else {
-      setSuccess(true);
       setRating(0);
       setComment('');
-      onSuccess();
-      setTimeout(() => setSuccess(false), 4000);
+      const reviewWithUsername: Review = {
+        ...reviewData,
+        username: user
+          ? (username ?? user.email?.split('@')[0] ?? 'User')
+          : (effectiveName ?? 'Guest'),
+        avatar_url: null,
+      };
+      onSuccess(reviewWithUsername);
     }
   };
 
-  if (success) {
-    return (
-      <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center animate-fade-in">
-        <p className="text-green-700 font-semibold">✓ Review posted!</p>
-        <p className="text-green-600 text-sm mt-0.5">Thanks for sharing your experience.</p>
-      </div>
-    );
-  }
-
-  // Not logged in, no guest name
   if (mode === 'choose') {
     return (
       <div className="bg-cream rounded-xl p-4 space-y-3">
@@ -89,10 +105,7 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
           <button onClick={onAuthRequired} className="btn-primary text-sm py-2.5">
             Sign in to review
           </button>
-          <button
-            onClick={() => setMode('guest-name')}
-            className="btn-secondary text-sm py-2.5"
-          >
+          <button onClick={() => setMode('guest-name')} className="btn-secondary text-sm py-2.5">
             Continue as guest
           </button>
         </div>
@@ -100,7 +113,6 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
     );
   }
 
-  // Guest name input step
   if (mode === 'guest-name') {
     return (
       <div className="bg-cream rounded-xl p-4 space-y-3">
@@ -115,10 +127,7 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
           autoFocus
         />
         <div className="flex gap-2">
-          <button
-            onClick={() => setMode('choose')}
-            className="btn-secondary flex-1 text-sm py-2"
-          >
+          <button onClick={() => setMode('choose')} className="btn-secondary flex-1 text-sm py-2">
             Back
           </button>
           <button
@@ -133,11 +142,10 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
     );
   }
 
-  // Review form (authenticated or guest with name)
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="font-semibold text-brown">Leave a Review</h4>
+        <h4 className="font-semibold text-brown text-sm">Your Review</h4>
         {!user && effectiveName && (
           <span className="text-xs text-brown/50 bg-cream px-2 py-0.5 rounded-full">
             as {effectiveName}
@@ -152,18 +160,18 @@ export function ReviewForm({ locationId, onSuccess, onAuthRequired, guestName }:
       )}
 
       <div>
-        <label className="block text-sm text-brown/60 mb-1.5">Rating *</label>
+        <label className="block text-xs text-brown/60 mb-1.5">Rating *</label>
         <StarRating rating={rating} interactive onRate={setRating} size="lg" />
       </div>
 
       <div>
-        <label className="block text-sm text-brown/60 mb-1">Comment (optional)</label>
+        <label className="block text-xs text-brown/60 mb-1">Comment (optional)</label>
         <textarea
           value={comment}
           onChange={e => setComment(e.target.value)}
           placeholder="Share your experience…"
           rows={3}
-          className="input-field resize-none"
+          className="input-field resize-none text-sm"
           maxLength={500}
         />
       </div>
